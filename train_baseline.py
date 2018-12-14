@@ -28,6 +28,17 @@ from random_erasing import RandomErasing
 import json
 import torch.nn.functional as F
 from torch.utils.data import Dataset,DataLoader
+from scipy.io import loadmat
+import os
+from scipy.io import savemat
+
+soft_flag = True
+# soft_label = loadmat('/home/fly/gcn/gcn/data/data_temp/soft_label.mat')
+# soft_label = loadmat('/home/fly/gcn/gcn/data/data_temp/weighted_label.mat')
+soft_label = loadmat('/home/fly/gcn/gcn/data/data_temp/hard_label.mat')
+soft_label = soft_label['soft_label']
+print('soft_label.shape = ')
+print(soft_label.shape)
 
 ######################################################################
 # Options
@@ -38,7 +49,9 @@ parser.add_argument('--data_dir',default='data/market/pytorch',type=str, help='t
 parser.add_argument('--batchsize', default=32, type=int, help='batchsize')
 parser.add_argument('--erasing_p', default=0.8, type=float, help='Random Erasing probability, in [0,1]')
 parser.add_argument('--use_dense', action='store_true', help='use densenet121' )
+parser.add_argument('--use_soft_label', default=True, type=bool, help='use_soft_label')
 opt = parser.parse_args()
+opt.use_dense = True
 
 data_dir = opt.data_dir
 name = opt.name
@@ -93,24 +106,35 @@ class dcganDataset(Dataset):
         self.image_dir = os.path.join(opt.data_dir, root)
         self.samples=[]   # train_data   xxx_label_flag_yyy.jpg
         self.img_label=[]
+        self.img_label_soft = []
         self.img_flag=[]
         self.transform=transform
         self.targte_transform=targte_transform
      #   self.class_num=len(os.listdir(self.image_dir))   # the number of the class
         self.train_val=root   # judge whether it is used for training for testing
+        i = 0
         if root=='train_new' :
             for folder in os.listdir(self.image_dir):
                 fdir=self.image_dir+'/'+folder    # folder gen_0000 means the images are generated images, so their flags are 1
-                if folder == 'gen_0000':     
-                    for files in os.listdir(fdir):
+                if folder == 'gen_0000':
+                    # print(os.listdir(fdir)[:50])
+                    # print(np.sort(os.listdir(fdir))[:50])
+                    # assert 0
+                    files_sort = np.sort(os.listdir(fdir))
+                    for files in files_sort:
                         temp=folder+'_'+files
                         self.img_label.append(int(folder[-4:]))
+                        if soft_flag:
+                            self.img_label_soft.append(soft_label[i])
+                            i += 1
                         self.img_flag.append(1)
                         self.samples.append(temp)
                 else:
                     for files in os.listdir(fdir):
                         temp=folder+'_'+files
                         self.img_label.append(int(folder))
+                        if soft_flag:
+                            self.img_label_soft.append(np.zeros((751,), dtype=np.float32))
                         self.img_flag.append(0)
                         self.samples.append(temp)
         else:                           #val
@@ -119,6 +143,8 @@ class dcganDataset(Dataset):
                 for files in os.listdir(fdir):
                     temp=folder+'_'+files
                     self.img_label.append(int(folder))
+                    if soft_flag:
+                        self.img_label_soft.append(np.zeros((751,), dtype=np.float32))
                     self.img_flag.append(0)
                     self.samples.append(temp)
 
@@ -137,16 +163,30 @@ class dcganDataset(Dataset):
             filename=temp[5:]
         img=default_loader(self.image_dir +'/'+foldername+'/'+filename)
         if self.train_val=='train_new':
-            result = {'img': data_transforms['train'](img), 'label': self.img_label[idx], 'flag':self.img_flag[idx]} # flag=0 for ture data and 0 for generated data
+            result = {'img': data_transforms['train'](img), 'label': self.img_label[idx],
+                      'soft_label': self.img_label_soft[idx],
+                      'flag': self.img_flag[idx]}  # flag=0 for ture data and 1 for generated data
         else:
-            result = {'img': data_transforms['val'](img), 'label': self.img_label[idx], 'flag':self.img_flag[idx]} 
+            result = {'img': data_transforms['val'](img), 'label': self.img_label[idx],
+                      'soft_label': self.img_label_soft[idx],
+                      'flag': self.img_flag[idx]}  # flag=0 for ture data and 1 for generated data
         return result
 
+def loss_entropy(input_soft, target_soft, reduce=False):
+    input_soft = F.log_softmax(input_soft, dim=1)
+    result = -target_soft*input_soft
+    result = torch.sum(result, 1)
+    if reduce:
+        result = torch.mean(result)
+    return result
+
+loss_print_cnt = 0
 class LSROloss(nn.Module):
     def __init__(self):     # change target to range(0,750)
         super(LSROloss,self).__init__()
                                         #input means the prediction score(torch Variable) 32*752,target means the corresponding label,   
-    def forward(self,input,target,flg): # while flg means the flag(=0 for true data and 1 for generated data)  batchsize*1
+    def forward(self,input,target,target_soft,flg): # while flg means the flag(=0 for true data and 1 for generated data)  batchsize*1
+        global loss_print_cnt
        # print(type(input))
         if input.dim()>2:                   # N defines the number of images, C defines channels,  K class in total
             input=input.view(input.size(0),input.size(1),-1)  # N,C,H,W => N,C,H*W
@@ -154,22 +194,52 @@ class LSROloss(nn.Module):
             input=input.contiguous().view(-1,input.size(2))  # N,H*W,C => N*H*W,C
        
        # normalize input
+        input_soft = input
         maxRow, _ = torch.max(input.data, 1)   # outputs.data  return the index of the biggest value in each row
         maxRow=maxRow.unsqueeze(1)
         input.data=input.data-maxRow
         
         target=target.view(-1,1)      # batchsize*1
-        flg=flg.view(-1,1) 
-        #len=flg.size()[0]
-        flos=F.log_softmax(input)    # N*K?      batchsize*751
-        flos=torch.sum(flos,1)/flos.size(1)       # N*1  get average      gan loss    
-        logpt=F.log_softmax(input)   # size: batchsize*751
-       # print(logpt)
-        logpt=logpt.gather(1,target)   # here is a problem 
-        logpt=logpt.view(-1)           # N*1     original loss   
-        flg=flg.view(-1) 
+        flg=flg.view(-1,1)
+        loss_func = nn.MSELoss(reduce=False)
+        if soft_flag:
+            # input_soft = F.softmax(input_soft, dim=1)
+            # flos = loss_func(input_soft, target_soft)
+            # flos = torch.sum(flos, 1)
+            # flos *= 10
+
+            flos = loss_entropy(input_soft, target_soft, reduce=False)
+
+        else:
+            flos = F.log_softmax(input, dim=1)  # N*K?      batchsize*751
+            flos = torch.sum(flos, 1) / flos.size(1)  # N*1  get average      gan loss
+        logpt=F.log_softmax(input, dim=1)   # size: batchsize*751
+        logpt=logpt.gather(1,target)   # here is a problem
+        logpt=logpt.view(-1)           # N*1     original loss
+        flg=flg.view(-1)
         flg=flg.type(torch.cuda.FloatTensor)
-        loss=-1*logpt*(1-flg)-flos*flg
+        loss=-1*logpt*(1-flg)+flos*flg
+
+        if loss_print_cnt % 500 == 0:
+            print('flg = %s' % flg.view(1, -1))
+            print('floss = %s' % flos.view(1, -1))
+            print('logpt = %s' % (-logpt).view(1, -1))
+            print('floss_flag = %s' % (flos * flg).view(1, -1))
+            print('logpt_flag = %s' % (-1 * logpt * (1 - flg)).view(1, -1))
+            # print('loss_print_cnt =%-6d   loss.mean = %s' % (loss_print_cnt, (flos * flg).sum().data[0]/flg.sum().data[0]))
+            # print('loss_print_cnt =%-6d  logpt.mean = %s' % (loss_print_cnt, (-1 * logpt * (1 - flg)).sum().data[0]/(32 - flg.sum().data[0])))
+            if flg.sum().data[0] != 0 and flg.sum().data[0] != 32:
+                print('cnt = %-6d     floss = %-18s      logpt = %-18s     loss.mean() = %-18s'
+                      % (loss_print_cnt, (flos * flg).sum().data[0] / flg.sum().data[0],
+                         (-1 * logpt * (1 - flg)).sum().data[0] / (32 - flg.sum().data[0]), loss.mean().data[0]))
+        elif loss_print_cnt % 50 == 0:
+            if flg.sum().data[0] != 0 and flg.sum().data[0] != 32:
+                print('cnt = %-6d     floss = %-18s      logpt = %-18s     loss.mean() = %-18s'
+                      % (loss_print_cnt, (flos * flg).sum().data[0] / flg.sum().data[0],
+                         (-1 * logpt * (1 - flg)).sum().data[0] / (32 - flg.sum().data[0]), loss.mean().data[0]))
+        loss_print_cnt += 1
+
+
         return loss.mean()
 
 dataloaders={}              
@@ -202,8 +272,9 @@ y_loss['val'] = []
 y_err = {}
 y_err['train'] = []
 y_err['val'] = []
-
+# cnt = 0
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
+    global cnt
     since = time.time()
     best_model_wts = model.state_dict()
     best_acc = 0.0
@@ -228,22 +299,25 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 # get the inputs
                 inputs=data['img']
                 labels=data['label']
+                soft_labels=data['soft_label']
                 flags= data['flag']
-                
+
                 if use_gpu:
                     inputs = Variable(inputs.cuda())
                     labels = Variable(labels.cuda())
+                    soft_labels = Variable(soft_labels.cuda())
                     flags=Variable(flags.cuda())
                 else:
-                    inputs, labels,flags = Variable(inputs), Variable(labels), Variable(flags)
-                        
+                    inputs, labels, flags = Variable(inputs), Variable(labels), Variable(flags)
+                    soft_labels = Variable(soft_labels)
+
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
                 # forward
                 outputs = model(inputs)
                 _, preds = torch.max(outputs.data, 1)   # outputs.data  return the index of the biggest value in each row
-                loss = criterion(outputs,labels,flags)
+                loss = criterion(outputs,labels,soft_labels,flags)
 
                 # backward + optimize only if in training phase
                 if phase == 'train':
@@ -259,8 +333,13 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 
                 running_corrects += torch.sum(preds == labels.data)
                 # print('running_corrects: '+str(running_corrects))
+                # print('cnt = %d' % cnt)
+                # cnt = cnt + 1
+                # print('running_loss = %s' % running_loss)
+                # print('loss.data[0] = %s' % loss.data[0])
 
             epoch_loss = running_loss / dataset_sizes[phase]
+            # print('epoch_loss = %s' % epoch_loss)
             #epoch_acc = running_corrects / dataset_sizes[phase]
             if phase =='train':
                # epoch_acc = running_corrects / (dataset_sizes[phase]-4992)    # 4992 generated image in total
