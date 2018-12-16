@@ -110,7 +110,7 @@ def every_cam_cnt(path):
 if __name__ == '__main__':
 
     train_new_original_path = 'data/market/pytorch/train_new_original'
-    train_new_path = 'data/market/pytorch/train_new'
-    camstyle_path = 'data/market/pytorch/bounding_box_train_camstyle'
+    train_new_path = 'data/market/pytorch/train_new_2.0idloss'
+    camstyle_path = '/home/fly/github/reid_gan/CycleGAN-for-CamStyle_guider/results/market/bounding_box_train_camstyle_2.0idloss'
     # get_dict(train_new_original_path)
     move_cam_image_to_train(camstyle_path, train_new_path)

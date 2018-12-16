@@ -51,12 +51,17 @@ parser.add_argument('--batchsize', default=32, type=int, help='batchsize')
 parser.add_argument('--erasing_p', default=0.8, type=float, help='Random Erasing probability, in [0,1]')
 parser.add_argument('--use_dense', action='store_true', help='use densenet121')
 parser.add_argument('--use_soft_label', default=True, type=bool, help='use_soft_label')
+parser.add_argument('--prob', default=0.8, type=float, help='hard label probability, in [0,1]')
+parser.add_argument('--modelname', default='', type=str, help='save model name')
+
 opt = parser.parse_args()
 opt.use_dense = True
-
 data_dir = opt.data_dir
 name = opt.name
-
+opt.prob = opt.prob/100.0
+print('prob = %.3f' % opt.prob)
+assert opt.prob >= 0 and opt.prob <= 1
+print('save model name = %s' % opt.modelname)
 generated_image_size = 0
 '''
 str_ids = opt.gpu_ids.split(',')
@@ -118,11 +123,11 @@ class dcganDataset(Dataset):
             for file in files:
                 temp = folder + '_' + file
                 if 'fake' in file:
-                    prob = 0.9
+                    prob = opt.prob
                     label = np.zeros((751,), dtype=np.float32)
-                    label.fill((1-prob)/750)
+                    label.fill((1 - prob) / 750)
                     label[int(folder[-4:])] = prob
-                    self.img_label.append(label)  #need to modify
+                    self.img_label.append(label)  # need to modify
                     self.img_flag.append(1)
                 else:
                     label = np.zeros((751,), dtype=np.float32)
@@ -166,7 +171,8 @@ class LSROloss(nn.Module):
         super(LSROloss, self).__init__()
         # input means the prediction score(torch Variable) 32*752,target means the corresponding label,
 
-    def forward(self, input, target, flg):  # while flg means the flag=0 for true data and 1 for generated data)  batchsize*1
+    def forward(self, input, target,
+                flg):  # while flg means the flag=0 for true data and 1 for generated data)  batchsize*1
         global loss_print_cnt
         # print(type(input))
         if input.dim() > 2:  # N defines the number of images, C defines channels,  K class in total
@@ -299,6 +305,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     # load best model weights
     model.load_state_dict(best_model_wts)
     save_network(model, 'best')
+    save_network(model, opt.modelname + '_best')
     return model
 
 
@@ -309,8 +316,17 @@ def save_network(network, epoch_label):
     save_filename = 'net_%s.pth' % epoch_label
     save_path = os.path.join('./model', name, save_filename)
     torch.save(network.state_dict(), save_path)
-    # this step is important, or error occurs "runtimeError: tensors are on different GPUs" 
+    # this step is important, or error occurs "runtimeError: tensors are on different GPUs"
 
+
+######################################################################
+# Load model
+# ----------single gpu training-----------------
+def load_network(network):
+    print('load pretraind model')
+    save_path = os.path.join('./model', name, 'base_net_best.pth')
+    network.load_state_dict(torch.load(save_path))
+    return network
 
 
 # print('------------'+str(len(clas_names))+'--------------')
@@ -327,16 +343,27 @@ criterion = LSROloss()
 ignored_params = list(map(id, model.model.fc.parameters())) + list(map(id, model.classifier.parameters()))
 base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
 
+refine = False
+print('refine = %s' % refine)
+if refine:
+    ratio = 0.1
+    step = 10
+    epoc = 30
+    load_network(model)
+else:
+    ratio = 1
+    step = 40
+    epoc = 130
+
 # Observe that all parameters are being optimized
 optimizer_ft = optim.SGD([
-    {'params': base_params, 'lr': 0.01},
-    {'params': model.model.fc.parameters(), 'lr': 0.05},
-    {'params': model.classifier.parameters(), 'lr': 0.05}
+    {'params': base_params, 'lr': ratio * 0.01},
+    {'params': model.model.fc.parameters(), 'lr': ratio * 0.05},
+    {'params': model.classifier.parameters(), 'lr': ratio * 0.05}
 ], momentum=0.9, weight_decay=5e-4, nesterov=True)
 
-
 # Decay LR by a factor of 0.1 every 40 epochs
-exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=40, gamma=0.1)
+exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=step, gamma=0.1)
 
 dir_name = os.path.join('./model', name)
 if not os.path.isdir(dir_name):
@@ -346,4 +373,4 @@ if not os.path.isdir(dir_name):
 with open('%s/opts.json' % dir_name, 'w') as fp:
     json.dump(vars(opt), fp, indent=1)
 
-model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler, num_epochs=3)
+model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler, num_epochs=epoc)
