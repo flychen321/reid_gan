@@ -107,6 +107,25 @@ def every_cam_cnt(path):
 
 
 
+def resize_rename(src_path, dst_path):
+    dirs = os.listdir(src_path)
+    for dir in dirs:
+        cnt = 0
+        if 'camstyle' in dir:
+            if not os.path.exists(os.path.join(dst_path, dir)):
+                os.mkdir(os.path.join(dst_path, dir))
+            files = glob.glob(os.path.join(src_path, dir, '*.jpg'))
+            for file in files:
+                file = os.path.split(file)[-1]
+                # print(os.path.join(src_path, dir, file))
+                src = cv2.imread(os.path.join(src_path, dir, file))
+                dst_f = cv2.resize(src, (64, 128), interpolation=cv2.INTER_CUBIC)
+                # print(os.path.join(dst_path, dir, file[:-4]+dir[-10:]+'.jpg'))
+                cv2.imwrite(os.path.join(dst_path, dir, file[:-4]+dir[-10:]+'.jpg'), dst_f)
+                cnt += 1
+            print('dir = %s  cnt = %d' % (dir, cnt))
+
+
 if __name__ == '__main__':
 
     train_new_original_path = 'data/market/pytorch/train_new_original'
@@ -120,3 +139,6 @@ if __name__ == '__main__':
     # for dir in dirs:
     #     move_cam_image_to_train(os.path.join(src_base_path, dir), train_new_path)
     move_cam_image_to_train(camstyle_path, train_new_path)
+    orignal_camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market'
+    new_camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market/resize_rename'
+    # resize_rename(orignal_camstyle_path, new_camstyle_path)
