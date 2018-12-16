@@ -36,10 +36,10 @@ from scipy.io import savemat
 soft_flag = True
 # soft_label = loadmat('/home/fly/gcn/gcn/data/data_temp/soft_label.mat')
 # soft_label = loadmat('/home/fly/gcn/gcn/data/data_temp/weighted_label.mat')
-soft_label = loadmat('/home/fly/gcn/gcn/data/data_temp/hard_label.mat')
-soft_label = soft_label['soft_label']
-print('soft_label.shape = ')
-print(soft_label.shape)
+# soft_label = loadmat('/home/fly/gcn/gcn/data/data_temp/hard_label.mat')
+# soft_label = soft_label['soft_label']
+# print('soft_label.shape = ')
+# print(soft_label.shape)
 
 ######################################################################
 # Options
