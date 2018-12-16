@@ -206,8 +206,8 @@ dataset_val_dir = os.path.join(data_dir, 'val_new')
 dataset_sizes['train'] = sum(len(os.listdir(os.path.join(dataset_train_dir, i))) for i in os.listdir(dataset_train_dir))
 dataset_sizes['val'] = sum(len(os.listdir(os.path.join(dataset_val_dir, i))) for i in os.listdir(dataset_val_dir))
 
-print(dataset_sizes['train'])
-print(dataset_sizes['val'])
+print('dataset_sizes[train] = %s' % dataset_sizes['train'])
+print('dataset_sizes[val] = %s' % dataset_sizes['val'])
 
 # class_names={}
 # class_names['train']=len(os.listdir(dataset_train_dir))
