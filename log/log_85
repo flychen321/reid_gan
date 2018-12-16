@@ -515,3 +515,20 @@ train Loss: 0.0139 Acc: 0.9974
 val Loss: 0.0037 Acc: 0.9827
 Epoch 127/129
 ----------
+train Loss: 0.0138 Acc: 0.9974
+val Loss: 0.0036 Acc: 0.9827
+Epoch 128/129
+----------
+train Loss: 0.0139 Acc: 0.9969
+val Loss: 0.0036 Acc: 0.9787
+Epoch 129/129
+----------
+train Loss: 0.0139 Acc: 0.9969
+val Loss: 0.0035 Acc: 0.9827
+Training complete in 181m 17s
+Best val Acc: 0.985353
+-------test-----------
+top1:0.922506 top5:0.972090 top10:0.983967 mAP:0.806401
+calculate initial distance
+Reranking complete in 1m 15s
+top1:0.937945 top5:0.967933 top10:0.976544 mAP:0.910805

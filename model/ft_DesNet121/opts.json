@@ -5,6 +5,6 @@
  "erasing_p": 0.8,
  "use_dense": true,
  "use_soft_label": true,
- "prob": 0.85,
- "modelname": "prob_85"
+ "prob": 0.8,
+ "modelname": "prob_80"
 }

@@ -232,6 +232,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
     best_model_wts = model.state_dict()
     best_acc = 0.0
+    best_loss = 10000.0
 
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
@@ -291,8 +292,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             y_err[phase].append(1.0 - epoch_acc)
             # deep copy the model
             if phase == 'val':
-                if epoch_acc > best_acc:
+                if epoch_acc > best_acc or (np.fabs(epoch_acc - best_acc) < 1e-5 and epoch_loss < best_loss):
                     best_acc = epoch_acc
+                    best_loss = epoch_loss
                     best_model_wts = model.state_dict()
                 if epoch >= 0:
                     save_network(model, epoch)
@@ -300,7 +302,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
-    print('Best val Acc: {:4f}'.format(best_acc))
+    print('Best val Loss: {:.4f}  Acc: {:4f}'.format(best_loss, best_acc))
 
     # load best model weights
     model.load_state_dict(best_model_wts)
