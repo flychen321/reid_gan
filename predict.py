@@ -18,6 +18,7 @@ import time
 import os
 import scipy.io
 from model import ft_net, ft_net_dense
+from PIL import Image
 
 ######################################################################
 # Options
@@ -60,10 +61,11 @@ data_transforms = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
+process_list = ['train_new_0.2idloss']
 data_dir = test_dir
-image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x), data_transforms) for x in ['train_new']}
+image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x), data_transforms) for x in process_list}
 dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=opt.batchsize,
-                                              shuffle=False, num_workers=4) for x in ['train_new']}
+                                              shuffle=False, num_workers=4) for x in process_list}
 
 use_gpu = torch.cuda.is_available()
 
@@ -71,8 +73,12 @@ use_gpu = torch.cuda.is_available()
 ######################################################################
 # Load model
 # ----------single gpu training-----------------
-def load_network(network):
-    save_path = os.path.join('./model', name, 'net_%s.pth' % opt.which_epoch)
+def load_network(network, model_name=None):
+    print('load pretraind model')
+    if model_name == None:
+        save_path = os.path.join('./model', name, 'baseline_best_without_gan.pth')
+    else:
+        save_path = model_name
     network.load_state_dict(torch.load(save_path))
     return network
 
@@ -90,22 +96,72 @@ def fliplr(img):
     return img_flip
 
 
-def extract_feature(model, dataloaders):
-    soft_labels = torch.FloatTensor()
-    count = 0
-    for data in dataloaders:
-        img, label = data
-        n, c, h, w = img.size()
-        count += n
-        #  print(count)
-        input_img = Variable(img.cuda())
-        outputs = model(input_img)
-        pred_label = outputs.data.cpu()
-        pred_label = F.softmax(pred_label, dim=1)
-        hard_label = np.argmax(pred_label, 1)
-        soft_labels = torch.cat((soft_labels, pred_label), 0)
-    return soft_labels
+# def extract_feature(model, dataloaders):
+#     soft_labels = torch.FloatTensor()
+#     count = 0
+#     min = 1
+#     for data in dataloaders:
+#         img, label = data
+#         n, c, h, w = img.size()
+#         count += n
+#         #  print(count)
+#         input_img = Variable(img.cuda())
+#         outputs = model(input_img)
+#         pred_label = outputs.data.cpu()
+#         pred_label = F.softmax(pred_label, dim=1)
+#         hard_label = np.argmax(pred_label, 1)
+#         soft_labels = torch.cat((soft_labels, pred_label), 0)
+#         for i in range(len(hard_label)):
+#             print('hard_label = %4d   max value = %.4f' % (
+#             hard_label[i], np.max(soft_labels.detach().cpu().numpy(), 1)[i]))
+#             if np.max(soft_labels.detach().cpu().numpy(), 1)[i] < min:
+#                 min = np.max(soft_labels.detach().cpu().numpy(), 1)[i]
+#         print('min = %s' % min)
+#     return soft_labels
 
+def cal_softlabels(model, train_new_path):
+    min = 1
+    cnt = 0
+    cnt_error = 0
+    probability = []
+    for p in train_new_path:
+        path, v = p
+        if 'fake' in path:
+            file = os.path.split(path)[-1]
+            real_label = int(os.path.split(path)[0][-4:])
+            input_image = Image.open(path)
+            input_image = data_transforms(input_image)
+            input_image = torch.unsqueeze(input_image, 0)
+            if use_gpu:
+                input_image = input_image.cuda()
+            outputs = model(input_image)
+            pred_label = torch.squeeze(outputs)
+            hard_label = torch.argmax(pred_label, 0)
+            soft_label = F.softmax(pred_label, 0)
+            soft_label = soft_label.detach().cpu().numpy()
+            # soft_labels = torch.cat((soft_labels, soft_label), 0)
+            if hard_label != v:
+                print('v = %4s     hard_label = %4d     max value = %.4f' % (v, hard_label, np.max(soft_label)))
+                print('path = %s' % path)
+                # os.remove(path)
+                cnt_error += 1
+
+            probability.append(soft_label[real_label])
+
+            if np.max(soft_label) < min:
+                min = np.max(soft_label)
+
+            if cnt == 0:
+                soft_labels = np.expand_dims(soft_label, 0)
+            else:
+                soft_labels = np.concatenate((soft_labels, np.expand_dims(soft_label, 0)), 0)
+            cnt += 1
+    print('cnt = %s   cnt_error=%s   acc = %.4f   min = %s' % (cnt, cnt_error, 1-cnt_error/cnt, min))
+    probability = np.sort(probability)
+    for i in range(len(probability)):
+        print('i = %4d   prob = %.4f' % (i, probability[i]))
+
+    return soft_labels
 
 def get_id(img_path):
     camera_id = []
@@ -122,7 +178,7 @@ def get_id(img_path):
     return camera_id, labels
 
 
-train_new_path = image_datasets['train_new'].imgs
+train_new_path = image_datasets[process_list[0]].imgs
 
 train_new_cam, train_new_label = get_id(train_new_path)
 
@@ -141,9 +197,11 @@ if use_gpu:
     model = model.cuda()
 
 # Extract feature
-train_new_softlabels = extract_feature(model, dataloaders['train_new'])
+# train_new_softlabels = extract_feature(model, dataloaders['train_new'])
+
+train_new_softlabels = cal_softlabels(model, train_new_path)
 
 # Save to Matlab for check
-result = {'train_new_softlabels': train_new_softlabels.numpy(), 'train_new_label': train_new_label,
+result = {'train_new_softlabels': train_new_softlabels, 'train_new_label': train_new_label,
           'train_new_cam': train_new_cam}
 scipy.io.savemat('predict_softlabels.mat', result)
