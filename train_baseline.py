@@ -18,6 +18,7 @@ import torchvision
 from torchvision import datasets, models, transforms
 from torchvision.datasets.folder import default_loader
 import matplotlib
+from PIL import Image
 
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
@@ -63,6 +64,8 @@ print('prob = %.3f' % opt.prob)
 assert opt.prob >= 0 and opt.prob <= 1
 print('save model name = %s' % opt.modelname)
 generated_image_size = 0
+use_gpu = torch.cuda.is_available()
+
 '''
 str_ids = opt.gpu_ids.split(',')
 gpu_ids = []
@@ -105,6 +108,46 @@ data_transforms = {
 }
 
 
+######################################################################
+# Save model
+# ---------------------------
+def save_network(network, epoch_label):
+    save_filename = 'net_%s.pth' % epoch_label
+    save_path = os.path.join('./model', name, save_filename)
+    torch.save(network.state_dict(), save_path)
+    # this step is important, or error occurs "runtimeError: tensors are on different GPUs"
+
+
+######################################################################
+# Load model
+# ----------single gpu training-----------------
+def load_network(network, model_name=None):
+    print('load pretraind model')
+    if model_name == None:
+        save_path = os.path.join('./model', name, 'baseline_best_without_gan.pth')
+    else:
+        save_path = model_name
+    network.load_state_dict(torch.load(save_path))
+    return network
+
+
+# print('------------'+str(len(clas_names))+'--------------')
+if opt.use_dense:
+    # print(len(class_names['train']))
+    model = ft_net_dense(751)  # 751 class for training data in market 1501 in total
+    model_pred = ft_net_dense(751)  # 751 class for training data in market 1501 in total
+else:
+    model = ft_net(751)
+    model_pred = ft_net(751)
+
+if use_gpu:
+    model = model.cuda()
+    model_pred = model_pred.cuda()
+
+load_network(model_pred)
+model_pred.eval()
+
+
 # read dcgan data
 class dcganDataset(Dataset):
     def __init__(self, root, transform=None, targte_transform=None):
@@ -123,10 +166,11 @@ class dcganDataset(Dataset):
             for file in files:
                 temp = folder + '_' + file
                 if 'fake' in file:
-                    prob = opt.prob
-                    label = np.zeros((751,), dtype=np.float32)
-                    label.fill((1 - prob) / 750)
-                    label[int(folder[-4:])] = prob
+                    # prob = opt.prob
+                    # label = np.zeros((751,), dtype=np.float32)
+                    # label.fill((1 - prob) / 750)
+                    # label[int(folder[-4:])] = prob
+                    label = get_one_softlabel(os.path.join(fdir, file))
                     self.img_label.append(label)  # need to modify
                     self.img_flag.append(1)
                 else:
@@ -152,6 +196,20 @@ class dcganDataset(Dataset):
             result = {'img': data_transforms['val'](img), 'label': self.img_label[idx],
                       'flag': self.img_flag[idx]}  # flag=0 for ture data and 1 for generated data
         return result
+
+
+def get_one_softlabel(path, model=model_pred):
+    input_image = Image.open(path)
+    input_image = data_transforms['val'](input_image)
+    input_image = torch.unsqueeze(input_image, 0)
+    if use_gpu:
+        input_image = input_image.cuda()
+    outputs = model(input_image)
+    pred_label = torch.squeeze(outputs)
+    hard_label = torch.argmax(pred_label, 0)
+    soft_label = F.softmax(pred_label, 0)
+    soft_label = soft_label.detach().cpu().numpy()
+    return soft_label
 
 
 def loss_entropy(input_soft, target_soft, reduce=True):
@@ -212,7 +270,6 @@ print('dataset_sizes[val] = %s' % dataset_sizes['val'])
 # class_names={}
 # class_names['train']=len(os.listdir(dataset_train_dir))
 # class_names['val']=len(os.listdir(dataset_val_dir))
-use_gpu = torch.cuda.is_available()
 
 ######################################################################
 # Training the model
@@ -311,41 +368,13 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     return model
 
 
-######################################################################
-# Save model
-# ---------------------------
-def save_network(network, epoch_label):
-    save_filename = 'net_%s.pth' % epoch_label
-    save_path = os.path.join('./model', name, save_filename)
-    torch.save(network.state_dict(), save_path)
-    # this step is important, or error occurs "runtimeError: tensors are on different GPUs"
 
-
-######################################################################
-# Load model
-# ----------single gpu training-----------------
-def load_network(network):
-    print('load pretraind model')
-    save_path = os.path.join('./model', name, 'base_net_best.pth')
-    network.load_state_dict(torch.load(save_path))
-    return network
-
-
-# print('------------'+str(len(clas_names))+'--------------')
-if opt.use_dense:
-    # print(len(class_names['train']))
-    model = ft_net_dense(751)  # 751 class for training data in market 1501 in total
-else:
-    model = ft_net(751)
-
-if use_gpu:
-    model = model.cuda()
 criterion = LSROloss()
 
 ignored_params = list(map(id, model.model.fc.parameters())) + list(map(id, model.classifier.parameters()))
 base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
 
-refine = False
+refine = True
 print('refine = %s' % refine)
 if refine:
     ratio = 0.1
