@@ -52,16 +52,25 @@ parser.add_argument('--batchsize', default=32, type=int, help='batchsize')
 parser.add_argument('--erasing_p', default=0.8, type=float, help='Random Erasing probability, in [0,1]')
 parser.add_argument('--use_dense', action='store_true', help='use densenet121')
 parser.add_argument('--use_soft_label', default=True, type=bool, help='use_soft_label')
-parser.add_argument('--prob', default=0.8, type=float, help='hard label probability, in [0,1]')
+parser.add_argument('--prob', default=80, type=float, help='hard label probability, in [0,1]')
 parser.add_argument('--modelname', default='', type=str, help='save model name')
+parser.add_argument('--max', default=80, type=float, help='max label probability, in [0,1]')
+parser.add_argument('--min', default=60, type=float, help='min label probability, in [0,1]')
 
 opt = parser.parse_args()
 opt.use_dense = True
 data_dir = opt.data_dir
 name = opt.name
-opt.prob = opt.prob/100.0
+opt.prob = opt.prob / 100.0
 print('prob = %.3f' % opt.prob)
 assert opt.prob >= 0 and opt.prob <= 1
+opt.max = opt.max / 100.0
+print('max val = %.3f' % opt.max)
+assert opt.max >= 0 and opt.max <= 1
+opt.min = opt.min / 100.0
+print('min val = %.3f' % opt.min)
+assert opt.min >= 0 and opt.min <= 1
+
 print('save model name = %s' % opt.modelname)
 generated_image_size = 0
 use_gpu = torch.cuda.is_available()
@@ -214,14 +223,22 @@ def get_one_softlabel(path, model=model_pred):
 
     ratio_1 = opt.prob
     ratio_1 = 0.8
+    max_val = opt.max
+    min_val = opt.min
     orig_value = soft_label[real_label]
-    others = 1.0 - ratio_1 * soft_label[real_label]
-    ratio_2 = others/(1.0 - soft_label[real_label])
+    # others = 1.0 - ratio_1 * soft_label[real_label]
+    # ratio_2 = others/(1.0 - soft_label[real_label])
+    # soft_label *= ratio_2
+    # soft_label[real_label] = ratio_1 * orig_value
+
+    others = 1.0 - (min_val + orig_value * (max_val - min_val))
+    ratio_2 = others / (1.0 - soft_label[real_label])
     soft_label *= ratio_2
-    soft_label[real_label] = ratio_1 * orig_value
-    print(orig_value)
-    print(soft_label[real_label])
-    print(sum(soft_label))
+    soft_label[real_label] = min_val + orig_value * (max_val - min_val)
+
+    # print(orig_value)
+    # print(soft_label[real_label])
+    # print(sum(soft_label))
 
     return soft_label
 
@@ -380,7 +397,6 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     save_network(model, 'best')
     save_network(model, opt.modelname + '_best')
     return model
-
 
 
 criterion = LSROloss()
