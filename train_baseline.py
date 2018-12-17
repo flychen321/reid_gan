@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Author: qiaoguan(https://github.com/qiaoguan/Person_reID_baseline_pytorch)
+# Author: chen
 '''
 this is the baseline,  if do not add gen_0000 folder(generateed images by DCGAN) under the training set,
 so the LSRO equals to crossentropy loss, and the generated_image_size is 0. else the loss function will use the generated images, the loss function for
@@ -200,6 +200,8 @@ class dcganDataset(Dataset):
 
 def get_one_softlabel(path, model=model_pred):
     input_image = Image.open(path)
+    file = os.path.split(path)[-1]
+    real_label = int(os.path.split(path)[0][-4:])
     input_image = data_transforms['val'](input_image)
     input_image = torch.unsqueeze(input_image, 0)
     if use_gpu:
@@ -209,6 +211,18 @@ def get_one_softlabel(path, model=model_pred):
     hard_label = torch.argmax(pred_label, 0)
     soft_label = F.softmax(pred_label, 0)
     soft_label = soft_label.detach().cpu().numpy()
+
+    ratio_1 = opt.prob
+    ratio_1 = 0.8
+    orig_value = soft_label[real_label]
+    others = 1.0 - ratio_1 * soft_label[real_label]
+    ratio_2 = others/(1.0 - soft_label[real_label])
+    soft_label *= ratio_2
+    soft_label[real_label] = ratio_1 * orig_value
+    print(orig_value)
+    print(soft_label[real_label])
+    print(sum(soft_label))
+
     return soft_label
 
 
