@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
 from torch.autograd import Variable
+import torch.nn.functional as F
 import numpy as np
 import torchvision
 from torchvision import datasets, models, transforms
@@ -100,6 +101,7 @@ def extract_feature(model, dataloaders):
         input_img = Variable(img.cuda())
         outputs = model(input_img)
         pred_label = outputs.data.cpu()
+        pred_label = F.softmax(pred_label, dim=1)
         hard_label = np.argmax(pred_label, 1)
         soft_labels = torch.cat((soft_labels, pred_label), 0)
     return soft_labels
@@ -144,4 +146,4 @@ train_new_softlabels = extract_feature(model, dataloaders['train_new'])
 # Save to Matlab for check
 result = {'train_new_softlabels': train_new_softlabels.numpy(), 'train_new_label': train_new_label,
           'train_new_cam': train_new_cam}
-scipy.io.savemat('predict_result.mat', result)
+scipy.io.savemat('predict_softlabels.mat', result)
