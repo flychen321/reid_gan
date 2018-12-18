@@ -19,6 +19,7 @@ import os
 import scipy.io
 from model import ft_net, ft_net_dense
 from PIL import Image
+import shutil
 
 ######################################################################
 # Options
@@ -61,7 +62,7 @@ data_transforms = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-process_list = ['train_new_0.2idloss']
+process_list = ['val_new']
 data_dir = test_dir
 image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x), data_transforms) for x in process_list}
 dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=opt.batchsize,
@@ -124,9 +125,13 @@ def cal_softlabels(model, train_new_path):
     cnt = 0
     cnt_error = 0
     probability = []
+    source_path = os.path.join('data/market/pytorch', 'train_new_original')
+    incorrect_path = 'data/market/pytorch/incorrect_related_iamges'
+    if not os.path.exists(incorrect_path):
+        os.mkdir(incorrect_path)
     for p in train_new_path:
         path, v = p
-        if 'fake' in path:
+        if not 'fake' in path:
             file = os.path.split(path)[-1]
             real_label = int(os.path.split(path)[0][-4:])
             input_image = Image.open(path)
@@ -139,10 +144,27 @@ def cal_softlabels(model, train_new_path):
             hard_label = torch.argmax(pred_label, 0)
             soft_label = F.softmax(pred_label, 0)
             soft_label = soft_label.detach().cpu().numpy()
+            hard_label = hard_label.detach().cpu().numpy()
             # soft_labels = torch.cat((soft_labels, soft_label), 0)
             if hard_label != v:
                 print('v = %4s     hard_label = %4d     max value = %.4f' % (v, hard_label, np.max(soft_label)))
                 print('path = %s' % path)
+                if not os.path.exists(os.path.join(incorrect_path, str(real_label).zfill(4))):
+                    os.mkdir(os.path.join(incorrect_path, str(real_label).zfill(4)))
+                shutil.copy(path, os.path.join(incorrect_path, str(real_label).zfill(4),
+                                               os.path.splitext(file)[0] + '_incorrect_' + str(real_label).zfill(
+                                                   4) + '_to_' + str(hard_label).zfill(4) + '.jpg'))
+                sfiles = os.listdir(os.path.join(source_path, str(real_label).zfill(4)))
+                for sfile in sfiles:
+                    # print(os.path.join(source_path, str(real_label).zfill(4)), sfile)
+                    # print(os.path.join(incorrect_path, str(real_label).zfill(4), sfile))
+                    shutil.copy(os.path.join(os.path.join(source_path, str(real_label).zfill(4)), sfile),
+                                             os.path.join(incorrect_path, str(real_label).zfill(4), sfile))
+                # print(os.path.join(source_path, str(hard_label).zfill(4)))
+                sfiles = os.listdir(os.path.join(source_path, str(hard_label).zfill(4)))
+                for sfile in sfiles:
+                    shutil.copy(os.path.join(os.path.join(source_path, str(hard_label).zfill(4)), sfile),
+                                             os.path.join(incorrect_path, str(real_label).zfill(4), sfile))
                 # os.remove(path)
                 cnt_error += 1
 
@@ -156,12 +178,18 @@ def cal_softlabels(model, train_new_path):
             else:
                 soft_labels = np.concatenate((soft_labels, np.expand_dims(soft_label, 0)), 0)
             cnt += 1
-    print('cnt = %s   cnt_error=%s   acc = %.4f   min = %s' % (cnt, cnt_error, 1-cnt_error/cnt, min))
+    print('cnt = %s   cnt_error=%s   acc = %.4f   min = %s' % (
+        cnt, cnt_error, 1 - (cnt_error + 1e-5) / (cnt + 1e-5), min))
     probability = np.sort(probability)
     for i in range(len(probability)):
         print('i = %4d   prob = %.4f' % (i, probability[i]))
 
-    return soft_labels
+    if cnt == 0:
+        return 0
+    else:
+        return soft_labels
+
+
 
 def get_id(img_path):
     camera_id = []
@@ -189,19 +217,86 @@ if opt.use_dense:
     model_structure = ft_net_dense(751)
 else:
     model_structure = ft_net(751)
-model = load_network(model_structure)
+model = load_network(model_structure, './model/model_train_new_all/net_10.pth')
+# model = load_network(model_structure)
 
 # Change to test mode
 model = model.eval()
 if use_gpu:
     model = model.cuda()
 
-# Extract feature
-# train_new_softlabels = extract_feature(model, dataloaders['train_new'])
 
-train_new_softlabels = cal_softlabels(model, train_new_path)
+def cal_one_softlabel(src_path, model=model):
+    real_label = int(os.path.split(src_path)[0][-4:])
+    input_image = Image.open(src_path)
+    input_image = data_transforms(input_image)
+    input_image = torch.unsqueeze(input_image, 0)
+    if use_gpu:
+        input_image = input_image.cuda()
+    outputs = model(input_image)
+    pred_label = torch.squeeze(outputs)
+    hard_label = torch.argmax(pred_label, 0)
+    soft_label = F.softmax(pred_label, 0)
+    soft_label = soft_label.detach().cpu().numpy()
+    hard_label = hard_label.detach().cpu().numpy()
+    return soft_label, hard_label, real_label
 
-# Save to Matlab for check
-result = {'train_new_softlabels': train_new_softlabels, 'train_new_label': train_new_label,
-          'train_new_cam': train_new_cam}
-scipy.io.savemat('predict_softlabels.mat', result)
+
+def re_divide(src_train_path, src_val_path, dst_train_path='train_new_re', dst_val_path='val_new_re', model=model):
+    dirs = os.listdir(src_train_path)
+    if not os.path.exists(os.path.join(os.path.split(src_train_path)[0], dst_train_path)):
+        os.mkdir(os.path.join(os.path.split(src_train_path)[0], dst_train_path))
+    if not os.path.exists(os.path.join(os.path.split(src_val_path)[0], dst_val_path)):
+        os.mkdir(os.path.join(os.path.split(src_val_path)[0], dst_val_path))
+    for dir in dirs:
+        files_train = os.listdir(os.path.join(src_train_path, dir))
+        files_val = os.listdir(os.path.join(src_val_path, dir))
+        files = []
+        prob = []
+        for file in files_train:
+            files.append(os.path.join(src_train_path, dir, file))
+        for file in files_val:
+            files.append(os.path.join(src_val_path, dir, file))
+        for file in files:
+            label = cal_one_softlabel(file, model)
+            prob.append(label[0][label[2]])
+        _, index = torch.topk(torch.from_numpy(np.array(prob)), int(len(prob)/2))
+
+        if not os.path.exists(os.path.join(os.path.split(src_train_path)[0], dst_train_path, dir)):
+            os.mkdir(os.path.join(os.path.split(src_train_path)[0], dst_train_path, dir))
+        if not os.path.exists(os.path.join(os.path.split(src_val_path)[0], dst_val_path, dir)):
+            os.mkdir(os.path.join(os.path.split(src_val_path)[0], dst_val_path, dir))
+        for i in range(len(files)):
+            if i == index[-1]:
+                shutil.copy(files[i], os.path.join(os.path.split(src_val_path)[0], dst_val_path, dir, os.path.split(files[i])[-1]))
+            else:
+                shutil.copy(files[i], os.path.join(os.path.split(src_val_path)[0], dst_train_path, dir, os.path.split(files[i])[-1]))
+
+def genete_train_new_all(src_train_path, src_val_path, dst_train_path='train_new_all'):
+    dirs = os.listdir(src_train_path)
+    if not os.path.exists(os.path.join(os.path.split(src_train_path)[0], dst_train_path)):
+        os.mkdir(os.path.join(os.path.split(src_train_path)[0], dst_train_path))
+    for dir in dirs:
+        files_train = os.listdir(os.path.join(src_train_path, dir))
+        files_val = os.listdir(os.path.join(src_val_path, dir))
+        if not os.path.exists(os.path.join(os.path.split(src_train_path)[0], dst_train_path, dir)):
+            os.mkdir(os.path.join(os.path.split(src_train_path)[0], dst_train_path, dir))
+        for file in files_train:
+            shutil.copy(os.path.join(src_train_path, dir, file), os.path.join(os.path.split(src_train_path)[0], dst_train_path, dir,
+                                               os.path.split(file)[-1]))
+        for file in files_val:
+            shutil.copy(os.path.join(src_val_path, dir, file), os.path.join(os.path.split(src_val_path)[0], dst_train_path, dir,
+                                           os.path.split(file)[-1]))
+
+
+src_train_path = 'data/market/pytorch/train_new_original'
+src_val_path = 'data/market/pytorch/val_new_original'
+re_divide(src_train_path, src_val_path)
+# genete_train_new_all(src_train_path, src_val_path)
+
+# train_new_softlabels = cal_softlabels(model, train_new_path)
+#
+# # Save to Matlab for check
+# result = {'train_new_softlabels': train_new_softlabels, 'train_new_label': train_new_label,
+#           'train_new_cam': train_new_cam}
+# scipy.io.savemat('predict_softlabels.mat', result)

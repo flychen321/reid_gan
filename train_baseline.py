@@ -133,7 +133,8 @@ def save_network(network, epoch_label):
 def load_network(network, model_name=None):
     print('load pretraind model')
     if model_name == None:
-        save_path = os.path.join('./model', name, 'baseline_best_without_gan.pth')
+        save_path = os.path.join('./model', name, 'net_prob_1_best_1.pth')
+        # save_path = os.path.join('./model', name, 'baseline_best_without_gan.pth')
     else:
         save_path = model_name
     network.load_state_dict(torch.load(save_path))
@@ -408,8 +409,8 @@ refine = True
 print('refine = %s' % refine)
 if refine:
     ratio = 0.1
-    step = 10
-    epoc = 30
+    step = 15
+    epoc = 40
     load_network(model)
 else:
     ratio = 1

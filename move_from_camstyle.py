@@ -29,6 +29,8 @@ def get_dict(path):
 def move_cam_image_to_train(src_path, dst_path):
     cnt = 0
     # files = os.listdir(src_path)
+    print('src_path = %s' % src_path)
+    print('dst_path = %s' % dst_path)
     files = glob.glob(os.path.join(src_path, '*.jpg'))
     dict_label = get_dict(dst_path)
     for file in files:
@@ -129,8 +131,8 @@ def resize_rename(src_path, dst_path):
 if __name__ == '__main__':
 
     train_new_original_path = 'data/market/pytorch/train_new_original'
-    train_new_path = 'data/market/pytorch/train_new_original_0.2idloss_cam12_cam13'
-    camstyle_path = '/home/dl/cf/cyclegan_guider/CycleGAN-for-CamStyle_guider/results/market/bounding_box_train_camstyle_cam1_cam3_0.2idloss'
+    train_new_path = 'data/market/pytorch/train_new_0.5idloss'
+    camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market/bounding_box_train_camstyle_0.5idloss'
     # get_dict(train_new_original_path)
     # src_base_path = '/home/dl/cf/reid_gan/data/market/pytorch/resize_rename'
 
@@ -139,6 +141,6 @@ if __name__ == '__main__':
     # for dir in dirs:
     #     move_cam_image_to_train(os.path.join(src_base_path, dir), train_new_path)
     move_cam_image_to_train(camstyle_path, train_new_path)
-    orignal_camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market'
-    new_camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market/resize_rename'
+    # orignal_camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market'
+    # new_camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market/resize_rename'
     # resize_rename(orignal_camstyle_path, new_camstyle_path)
