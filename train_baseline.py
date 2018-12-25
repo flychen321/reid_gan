@@ -35,13 +35,18 @@ import os
 from scipy.io import savemat
 
 soft_flag = True
-# soft_label = loadmat('/home/fly/gcn/gcn/data/data_temp/soft_label.mat')
-# soft_label = loadmat('/home/fly/gcn/gcn/data/data_temp/weighted_label.mat')
-# soft_label = loadmat('/home/fly/gcn/gcn/data/data_temp/hard_label.mat')
-# soft_label = soft_label['soft_label']
-# print('soft_label.shape = ')
-# print(soft_label.shape)
 
+dir_path = '/home/fly/github/reid_gcn/gcn/data/data_reid'
+soft_labels = loadmat(os.path.join(dir_path, 'soft_label_dict.mat'))
+
+# soft_labels = loadmat('/home/fly/gcn/gcn/data/data_temp/weighted_label.mat')
+# soft_labels = loadmat('/home/fly/gcn/gcn/data/data_temp/hard_label.mat')
+# soft_labels = soft_label['soft_label']
+print('soft_labels len = ')
+print(len(soft_labels))
+for key in soft_labels.keys():
+    if 'jpg' not in key:
+        print(key)
 ######################################################################
 # Options
 parser = argparse.ArgumentParser(description='Training')
@@ -133,7 +138,7 @@ def save_network(network, epoch_label):
 def load_network(network, model_name=None):
     print('load pretraind model')
     if model_name == None:
-        save_path = os.path.join('./model', name, 'net_prob_1_best_1.pth')
+        save_path = os.path.join('./model', name, 'baseline_best_without_gan.pth')
         # save_path = os.path.join('./model', name, 'baseline_best_without_gan.pth')
     else:
         save_path = model_name
@@ -180,7 +185,13 @@ class dcganDataset(Dataset):
                     # label = np.zeros((751,), dtype=np.float32)
                     # label.fill((1 - prob) / 750)
                     # label[int(folder[-4:])] = prob
-                    label = get_one_softlabel(os.path.join(fdir, file))
+
+                    # label = get_one_softlabel(os.path.join(fdir, file))
+
+                    label = soft_labels[file]
+                    label = np.squeeze(label, 0)
+                    label = label_adjust(label, int(folder[-4:]))
+
                     self.img_label.append(label)  # need to modify
                     self.img_flag.append(1)
                 else:
@@ -207,6 +218,22 @@ class dcganDataset(Dataset):
                       'flag': self.img_flag[idx]}  # flag=0 for ture data and 1 for generated data
         return result
 
+def label_adjust(soft_label, real_label, min_val=0.8, max_val=0.8):
+    ratio_1 = opt.prob
+    ratio_1 = 0.8
+    max_val = opt.max
+    min_val = opt.min
+    orig_value = soft_label[real_label]
+    # others = 1.0 - ratio_1 * soft_label[real_label]
+    # ratio_2 = others/(1.0 - soft_label[real_label])
+    # soft_label *= ratio_2
+    # soft_label[real_label] = ratio_1 * orig_value
+
+    others = 1.0 - (min_val + orig_value * (max_val - min_val))
+    ratio_2 = others / (1.0 - soft_label[real_label])
+    soft_label *= ratio_2
+    soft_label[real_label] = min_val + orig_value * (max_val - min_val)
+    return soft_label
 
 def get_one_softlabel(path, model=model_pred):
     input_image = Image.open(path)
@@ -222,20 +249,7 @@ def get_one_softlabel(path, model=model_pred):
     soft_label = F.softmax(pred_label, 0)
     soft_label = soft_label.detach().cpu().numpy()
 
-    ratio_1 = opt.prob
-    ratio_1 = 0.8
-    max_val = opt.max
-    min_val = opt.min
-    orig_value = soft_label[real_label]
-    # others = 1.0 - ratio_1 * soft_label[real_label]
-    # ratio_2 = others/(1.0 - soft_label[real_label])
-    # soft_label *= ratio_2
-    # soft_label[real_label] = ratio_1 * orig_value
-
-    others = 1.0 - (min_val + orig_value * (max_val - min_val))
-    ratio_2 = others / (1.0 - soft_label[real_label])
-    soft_label *= ratio_2
-    soft_label[real_label] = min_val + orig_value * (max_val - min_val)
+    soft_label = label_adjust(soft_label, real_label)
 
     # print(orig_value)
     # print(soft_label[real_label])
@@ -380,13 +394,14 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             y_loss[phase].append(epoch_loss)
             y_err[phase].append(1.0 - epoch_acc)
             # deep copy the model
-            if phase == 'val' and epoch > 3:
+            if phase == 'val' and epoch >= 0:
                 if epoch_acc > best_acc or (np.fabs(epoch_acc - best_acc) < 1e-5 and epoch_loss < best_loss):
                     best_acc = epoch_acc
                     best_loss = epoch_loss
                     best_model_wts = model.state_dict()
-                if epoch >= 0:
-                    save_network(model, epoch)
+                if epoch >= 40:
+                    # save_network(model, epoch)
+                    save_network(model, opt.modelname + str(epoch))
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
@@ -409,8 +424,8 @@ refine = True
 print('refine = %s' % refine)
 if refine:
     ratio = 0.1
-    step = 15
-    epoc = 40
+    step = 10
+    epoc = 35
     load_network(model)
 else:
     ratio = 1

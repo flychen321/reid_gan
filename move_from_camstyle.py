@@ -131,8 +131,8 @@ def resize_rename(src_path, dst_path):
 if __name__ == '__main__':
 
     train_new_original_path = 'data/market/pytorch/train_new_original'
-    train_new_path = 'data/market/pytorch/train_new_0.5idloss'
-    camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market/bounding_box_train_camstyle_0.5idloss'
+    train_new_path = 'data/market/pytorch/train_new'
+    camstyle_path = 'data/market/pytorch/cam/bounding_box_train_camstyle_wo_guider'
     # get_dict(train_new_original_path)
     # src_base_path = '/home/dl/cf/reid_gan/data/market/pytorch/resize_rename'
 
