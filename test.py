@@ -30,7 +30,7 @@ parser.add_argument('--batchsize', default=32, type=int, help='batchsize')
 parser.add_argument('--use_dense', action='store_true', help='use densenet121' )
 
 opt = parser.parse_args()
-
+opt.use_dense =True
 str_ids = opt.gpu_ids.split(',')
 #which_epoch = opt.which_epoch
 name = opt.name
@@ -82,7 +82,9 @@ use_gpu = torch.cuda.is_available()
 # Load model
 #----------single gpu training-----------------
 def load_network(network):
+
     save_path = os.path.join('./model',name,'net_%s.pth'%opt.which_epoch)
+    # save_path = os.path.join('./model',name,'baseline_best_without_gan.pth')
     network.load_state_dict(torch.load(save_path))
     return network
 

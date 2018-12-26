@@ -138,8 +138,8 @@ def save_network(network, epoch_label):
 def load_network(network, model_name=None):
     print('load pretraind model')
     if model_name == None:
-        save_path = os.path.join('./model', name, 'baseline_best_without_gan.pth')
         # save_path = os.path.join('./model', name, 'baseline_best_without_gan.pth')
+        save_path = os.path.join('./model', name, 'net_best.pth')
     else:
         save_path = model_name
     network.load_state_dict(torch.load(save_path))
@@ -218,6 +218,7 @@ class dcganDataset(Dataset):
                       'flag': self.img_flag[idx]}  # flag=0 for ture data and 1 for generated data
         return result
 
+
 def label_adjust(soft_label, real_label, min_val=0.8, max_val=0.8):
     ratio_1 = opt.prob
     ratio_1 = 0.8
@@ -234,6 +235,7 @@ def label_adjust(soft_label, real_label, min_val=0.8, max_val=0.8):
     soft_label *= ratio_2
     soft_label[real_label] = min_val + orig_value * (max_val - min_val)
     return soft_label
+
 
 def get_one_softlabel(path, model=model_pred):
     input_image = Image.open(path)
@@ -336,7 +338,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     best_model_wts = model.state_dict()
     best_acc = 0.0
     best_loss = 10000.0
-
+    best_epoch = 0
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
@@ -398,6 +400,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 if epoch_acc > best_acc or (np.fabs(epoch_acc - best_acc) < 1e-5 and epoch_loss < best_loss):
                     best_acc = epoch_acc
                     best_loss = epoch_loss
+                    best_epoch = epoch
                     best_model_wts = model.state_dict()
                 if epoch >= 40:
                     # save_network(model, epoch)
@@ -406,6 +409,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
+    print('Best val epoch: {:d}'.format(best_epoch))
     print('Best val Loss: {:.4f}  Acc: {:4f}'.format(best_loss, best_acc))
 
     # load best model weights
@@ -423,7 +427,7 @@ base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
 refine = True
 print('refine = %s' % refine)
 if refine:
-    ratio = 0.1
+    ratio = 0.2
     step = 10
     epoc = 35
     load_network(model)
