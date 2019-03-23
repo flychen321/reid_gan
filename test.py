@@ -84,6 +84,7 @@ use_gpu = torch.cuda.is_available()
 def load_network(network):
 
     save_path = os.path.join('./model',name,'net_%s.pth'%opt.which_epoch)
+    print('load model name is %s' % save_path)
     # save_path = os.path.join('./model',name,'baseline_best_without_gan.pth')
     network.load_state_dict(torch.load(save_path))
     return network

@@ -406,9 +406,8 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                     best_acc = epoch_acc
                     best_loss = epoch_loss
                     best_epoch = epoch
-                    best_model_wts = model.state_dict()
+                    save_network(model, 'best')
                 if epoch >= 40:
-                    # save_network(model, epoch)
                     save_network(model, opt.modelname + str(epoch))
 
     time_elapsed = time.time() - since
@@ -418,10 +417,6 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     print('Best val Loss: {:.4f}  Acc: {:4f}'.format(best_loss, best_acc))
 
     save_network(model, 'last')
-    # load best model weights
-    model.load_state_dict(best_model_wts)
-    save_network(model, 'best')
-    save_network(model, opt.modelname + '_best')
     return model
 
 

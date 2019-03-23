@@ -31,7 +31,7 @@ def get_dict(path):
                 break
     print('index = %d' % np.argmax(num))
     print('max = %s' % (np.max(num)))
-    print('ditc_label = %s' % dict_label)
+    # print('ditc_label = %s' % dict_label)
     return dict_label
 
 
