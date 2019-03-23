@@ -3,6 +3,15 @@ import shutil
 import numpy as np
 import cv2
 import glob
+import argparse
+parser = argparse.ArgumentParser(description='Augment')
+parser.add_argument('--data_dir', default='cycle_all', type=str, help='data_dir')
+parser.add_argument('--mode', default=1, type=int, help='mode')
+opt = parser.parse_args()
+print('opt = %s' % opt)
+data_dir = opt.data_dir
+print('data_dir = %s' % data_dir)
+print('opt.mode = %s' % opt.mode)
 
 def get_dict(path):
     dict_label = {}
@@ -26,17 +35,23 @@ def get_dict(path):
     return dict_label
 
 
-def move_cam_image_to_train(src_path, dst_path):
+def move_cam_image_to_train(original_path, src_path, dst_path):
     cnt = 0
     # files = os.listdir(src_path)
     print('src_path = %s' % src_path)
     print('dst_path = %s' % dst_path)
     files = glob.glob(os.path.join(src_path, '*.jpg'))
-    dict_label = get_dict(dst_path)
+    selected_file_num = int(opt.mode * 10000)
+    print('total_file_num = %d' % len(files))
+    print('selected_file_num = %d' % selected_file_num)
+    files = np.random.choice(files, selected_file_num, replace=False)
+    print('real selected_file_num = %d' % len(files))
+    dict_label = get_dict(original_path)
+    if os.path.exists(dst_path):
+        shutil.rmtree(dst_path)
+    shutil.copytree(original_path, dst_path)
     for file in files:
         file = os.path.split(file)[-1]
-        if not os.path.exists(dst_path):
-            os.mkdir(dst_path)
         dir = dict_label[file[:4]]
         if not os.path.exists(os.path.join(dst_path, dir)):
             os.mkdir(os.path.join(dst_path, dir))
@@ -131,8 +146,8 @@ def resize_rename(src_path, dst_path):
 if __name__ == '__main__':
 
     train_new_original_path = 'data/market/pytorch/train_new_original'
-    train_new_path = 'data/market/pytorch/train_new'
-    camstyle_path = 'data/market/pytorch/cam/bounding_box_train_camstyle_wo_guider'
+    train_new_dst_path = 'data/market/pytorch/train_new'
+    camstyle_path = 'data/market/pytorch/cycle_all/bounding_box_train_camstyle_15transfer_copy'
     # get_dict(train_new_original_path)
     # src_base_path = '/home/dl/cf/reid_gan/data/market/pytorch/resize_rename'
 
@@ -140,7 +155,7 @@ if __name__ == '__main__':
     # dirs = os.listdir(src_base_path)
     # for dir in dirs:
     #     move_cam_image_to_train(os.path.join(src_base_path, dir), train_new_path)
-    move_cam_image_to_train(camstyle_path, train_new_path)
+    move_cam_image_to_train(train_new_original_path, camstyle_path, train_new_dst_path)
     # orignal_camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market'
     # new_camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market/resize_rename'
     # resize_rename(orignal_camstyle_path, new_camstyle_path)

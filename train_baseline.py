@@ -36,24 +36,24 @@ from scipy.io import savemat
 
 soft_flag = True
 
-dir_path = '/home/fly/github/reid_gcn/gcn/data/data_reid'
-soft_labels = loadmat(os.path.join(dir_path, 'soft_label_dict.mat'))
+# dir_path = '/home/fly/github/reid_gcn/gcn/data/data_reid'
+# soft_labels = loadmat(os.path.join(dir_path, 'soft_label_dict.mat'))
 
 # soft_labels = loadmat('/home/fly/gcn/gcn/data/data_temp/weighted_label.mat')
 # soft_labels = loadmat('/home/fly/gcn/gcn/data/data_temp/hard_label.mat')
 # soft_labels = soft_label['soft_label']
-print('soft_labels len = ')
-print(len(soft_labels))
-for key in soft_labels.keys():
-    if 'jpg' not in key:
-        print(key)
+# print('soft_labels len = ')
+# print(len(soft_labels))
+# for key in soft_labels.keys():
+#     if 'jpg' not in key:
+#         print(key)
 ######################################################################
 # Options
 parser = argparse.ArgumentParser(description='Training')
 # parser.add_argument('--gpu_ids',default='3', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
 parser.add_argument('--name', default='ft_DesNet121', type=str, help='output model name')
 parser.add_argument('--data_dir', default='data/market/pytorch', type=str, help='training dir path')
-parser.add_argument('--batchsize', default=32, type=int, help='batchsize')
+parser.add_argument('--batchsize', default=48, type=int, help='batchsize')
 parser.add_argument('--erasing_p', default=0.8, type=float, help='Random Erasing probability, in [0,1]')
 parser.add_argument('--use_dense', action='store_true', help='use densenet121')
 parser.add_argument('--use_soft_label', default=True, type=bool, help='use_soft_label')
@@ -181,16 +181,21 @@ class dcganDataset(Dataset):
             for file in files:
                 temp = folder + '_' + file
                 if 'fake' in file:
-                    # prob = opt.prob
+                    # #for dcgan
                     # label = np.zeros((751,), dtype=np.float32)
-                    # label.fill((1 - prob) / 750)
-                    # label[int(folder[-4:])] = prob
+                    # label.fill(1.0 / 751)
+
+                    # #for cyclegan
+                    prob = 0.1
+                    label = np.zeros((751,), dtype=np.float32)
+                    label.fill((1 - prob) / 750)
+                    label[int(folder[-4:])] = prob
 
                     # label = get_one_softlabel(os.path.join(fdir, file))
 
-                    label = soft_labels[file]
-                    label = np.squeeze(label, 0)
-                    label = label_adjust(label, int(folder[-4:]))
+                    # label = soft_labels[file]
+                    # label = np.squeeze(label, 0)
+                    # label = label_adjust(label, int(folder[-4:]))
 
                     self.img_label.append(label)  # need to modify
                     self.img_flag.append(1)
@@ -408,6 +413,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
         time_elapsed // 60, time_elapsed % 60))
     print('Best val Loss: {:.4f}  Acc: {:4f}'.format(best_loss, best_acc))
 
+    save_network(model, 'last')
     # load best model weights
     model.load_state_dict(best_model_wts)
     save_network(model, 'best')
@@ -420,7 +426,7 @@ criterion = LSROloss()
 ignored_params = list(map(id, model.model.fc.parameters())) + list(map(id, model.classifier.parameters()))
 base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
 
-refine = True
+refine = False
 print('refine = %s' % refine)
 if refine:
     ratio = 0.1
