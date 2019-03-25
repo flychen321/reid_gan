@@ -23,7 +23,7 @@ from model import ft_net, ft_net_dense
 # --------
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--gpu_ids',default='0', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
-parser.add_argument('--which_epoch',default='best', type=str, help='0,1,2,3...or last')
+parser.add_argument('--which_epoch',default='last', type=str, help='0,1,2,3...or last')
 parser.add_argument('--test_dir',default='./data/market/pytorch',type=str, help='./test_data')
 parser.add_argument('--name', default='ft_DesNet121', type=str, help='save model path')
 parser.add_argument('--batchsize', default=32, type=int, help='batchsize')
@@ -84,6 +84,7 @@ use_gpu = torch.cuda.is_available()
 def load_network(network):
 
     save_path = os.path.join('./model',name,'net_%s.pth'%opt.which_epoch)
+    print('load model name is %s' % save_path)
     # save_path = os.path.join('./model',name,'baseline_best_without_gan.pth')
     network.load_state_dict(torch.load(save_path))
     return network

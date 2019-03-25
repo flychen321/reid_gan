@@ -53,7 +53,7 @@ parser = argparse.ArgumentParser(description='Training')
 # parser.add_argument('--gpu_ids',default='3', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
 parser.add_argument('--name', default='ft_DesNet121', type=str, help='output model name')
 parser.add_argument('--data_dir', default='data/market/pytorch', type=str, help='training dir path')
-parser.add_argument('--batchsize', default=48, type=int, help='batchsize')
+parser.add_argument('--batchsize', default=32, type=int, help='batchsize')
 parser.add_argument('--erasing_p', default=0.8, type=float, help='Random Erasing probability, in [0,1]')
 parser.add_argument('--use_dense', action='store_true', help='use densenet121')
 parser.add_argument('--use_soft_label', default=True, type=bool, help='use_soft_label')
@@ -159,8 +159,8 @@ if use_gpu:
     model = model.cuda()
     model_pred = model_pred.cuda()
 
-load_network(model_pred)
-model_pred.eval()
+# load_network(model_pred)
+# model_pred.eval()
 
 
 # read dcgan data
@@ -180,16 +180,16 @@ class dcganDataset(Dataset):
             files = os.listdir(fdir)
             for file in files:
                 temp = folder + '_' + file
-                if 'fake' in file:
+                if 'test' in file:
                     # #for dcgan
-                    # label = np.zeros((751,), dtype=np.float32)
-                    # label.fill(1.0 / 751)
+                    label = np.zeros((751,), dtype=np.float32)
+                    label.fill(1.0 / 751)
 
                     # #for cyclegan
-                    prob = 0.1
-                    label = np.zeros((751,), dtype=np.float32)
-                    label.fill((1 - prob) / 750)
-                    label[int(folder[-4:])] = prob
+                    # prob = 0.1
+                    # label = np.zeros((751,), dtype=np.float32)
+                    # label.fill((1 - prob) / 750)
+                    # label[int(folder[-4:])] = prob
 
                     # label = get_one_softlabel(os.path.join(fdir, file))
 
@@ -406,8 +406,8 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                     best_acc = epoch_acc
                     best_loss = epoch_loss
                     best_epoch = epoch
-                    best_model_wts = model.state_dict()
-                if epoch >= 40:
+                    save_network(model, 'best')
+                if epoch >= 40 and (epoc+1)%10 == 0:
                     # save_network(model, epoch)
                     save_network(model, opt.modelname + str(epoch))
 
@@ -418,10 +418,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     print('Best val Loss: {:.4f}  Acc: {:4f}'.format(best_loss, best_acc))
 
     save_network(model, 'last')
-    # load best model weights
-    model.load_state_dict(best_model_wts)
-    save_network(model, 'best')
-    save_network(model, opt.modelname + '_best')
+    save_network(model, opt.modelname + '_last')
     return model
 
 
@@ -439,8 +436,8 @@ if refine:
     load_network(model)
 else:
     ratio = 1
-    step = 40
-    epoc = 130
+    step = 30
+    epoc = 100
 
 # Observe that all parameters are being optimized
 optimizer_ft = optim.SGD([

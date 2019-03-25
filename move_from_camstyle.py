@@ -46,19 +46,22 @@ def move_cam_image_to_train(original_path, src_path, dst_path):
     print('selected_file_num = %d' % selected_file_num)
     files = np.random.choice(files, selected_file_num, replace=False)
     print('real selected_file_num = %d' % len(files))
-    dict_label = get_dict(original_path)
+    # dict_label = get_dict(original_path)
     if os.path.exists(dst_path):
         shutil.rmtree(dst_path)
     shutil.copytree(original_path, dst_path)
+    gen_dir = 'cgen'
+    os.mkdir(os.path.join(dst_path, gen_dir))
     for file in files:
-        file = os.path.split(file)[-1]
-        dir = dict_label[file[:4]]
-        if not os.path.exists(os.path.join(dst_path, dir)):
-            os.mkdir(os.path.join(dst_path, dir))
-        # shutil.copy(os.path.join(src_path, file), os.path.join(dst_path, dir, file))
-        src = cv2.imread(os.path.join(src_path, file))
-        dst_f = cv2.resize(src, (64, 128))
-        cv2.imwrite(os.path.join(dst_path, dir, file), dst_f)
+        # file = os.path.split(file)[-1]
+        # dir = dict_label[file[:4]]
+        # if not os.path.exists(os.path.join(dst_path, dir)):
+        #     os.mkdir(os.path.join(dst_path, dir))
+        # # shutil.copy(os.path.join(src_path, file), os.path.join(dst_path, dir, file))
+        # src = cv2.imread(os.path.join(src_path, file))
+        # dst_f = cv2.resize(src, (64, 128))
+        # cv2.imwrite(os.path.join(dst_path, dir, file), dst_f)
+        shutil.copy(file, os.path.join(dst_path, gen_dir, os.path.split(file)[-1]))
         cnt += 1
     print('cnt = %s' % cnt)
 
@@ -147,7 +150,7 @@ if __name__ == '__main__':
 
     train_new_original_path = 'data/market/pytorch/train_new_original'
     train_new_dst_path = 'data/market/pytorch/train_new'
-    camstyle_path = 'data/market/pytorch/cycle_all/bounding_box_train_camstyle_15transfer_copy'
+    dcgan_path = 'data/market/pytorch/dcgan_all'
     # get_dict(train_new_original_path)
     # src_base_path = '/home/dl/cf/reid_gan/data/market/pytorch/resize_rename'
 
@@ -155,7 +158,7 @@ if __name__ == '__main__':
     # dirs = os.listdir(src_base_path)
     # for dir in dirs:
     #     move_cam_image_to_train(os.path.join(src_base_path, dir), train_new_path)
-    move_cam_image_to_train(train_new_original_path, camstyle_path, train_new_dst_path)
+    move_cam_image_to_train(train_new_original_path, dcgan_path, train_new_dst_path)
     # orignal_camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market'
     # new_camstyle_path = 'CycleGAN-for-CamStyle_guider/results/market/resize_rename'
     # resize_rename(orignal_camstyle_path, new_camstyle_path)
