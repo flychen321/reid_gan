@@ -23,7 +23,7 @@ from model import ft_net, ft_net_dense
 # --------
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--gpu_ids',default='0', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
-parser.add_argument('--which_epoch',default='last', type=str, help='0,1,2,3...or last')
+parser.add_argument('--which_epoch',default='best', type=str, help='0,1,2,3...or last')
 parser.add_argument('--test_dir',default='./data/market/pytorch',type=str, help='./test_data')
 parser.add_argument('--name', default='ft_DesNet121', type=str, help='save model path')
 parser.add_argument('--batchsize', default=32, type=int, help='batchsize')
@@ -165,10 +165,16 @@ query_cam,query_label = get_id(query_path)
 ######################################################################
 # Load Collected data Trained model
 print('-------test-----------')
+dataset_train_dir = os.path.join(data_dir, 'train_new')
+dataset_val_dir = os.path.join(data_dir, 'val_new')
+class_num = {}
+class_num['train'] = len(os.listdir(dataset_train_dir))
+class_num['val'] = len(os.listdir(dataset_val_dir))
+print('class_num  train = %d   val = %d' % (class_num['train'], class_num['val']))
 if opt.use_dense:
-    model_structure = ft_net_dense(751)
+    model_structure = ft_net_dense(class_num['train'])
 else:
-    model_structure = ft_net(751)
+    model_structure = ft_net(class_num['train'])
 model = load_network(model_structure)
 
 # Remove the final fc layer and classifier layer

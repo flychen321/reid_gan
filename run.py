@@ -10,7 +10,7 @@ for i in np.arange(1, 7):
     #     i) + ' --min ' + str(value[i][0]) + ' --max ' + str(value[i][1]) + ' >> ' + log_name
 
     os.system('python move_from_camstyle.py --mode ' + str(i) + ' >>  ' + log_name)
-    cmd = 'python train_baseline.py --use_dense  --modelname ' + 'prob_' + str(i) + ' --prob ' + str(
+    cmd = 'python train_without_gan.py --use_dense  --modelname ' + 'prob_' + str(i) + ' --prob ' + str(
         i) + ' >> ' + log_name
     print('cmd = %s' % cmd)
     os.system(cmd)
