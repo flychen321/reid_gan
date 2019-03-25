@@ -180,7 +180,10 @@ class dcganDataset(Dataset):
             files = os.listdir(fdir)
             for file in files:
                 temp = folder + '_' + file
+                # #for dcgan
                 if 'test' in file:
+                # #for cyclegan
+                # if 'fake' in file:
                     # #for dcgan
                     label = np.zeros((751,), dtype=np.float32)
                     label.fill(1.0 / 751)
