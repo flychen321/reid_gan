@@ -407,9 +407,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                     best_loss = epoch_loss
                     best_epoch = epoch
                     save_network(model, 'best')
+                    save_network(model, opt.modelname + '_best')
                 if epoch >= 40 and (epoc+1)%10 == 0:
-                    # save_network(model, epoch)
-                    save_network(model, opt.modelname + str(epoch))
+                    save_network(model, epoch)
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
