@@ -47,6 +47,7 @@ parser.add_argument('--max', default=80, type=float, help='max label probability
 parser.add_argument('--min', default=60, type=float, help='min label probability, in [0,1]')
 
 opt = parser.parse_args()
+print('opt = %s' % opt)
 opt.use_dense = True
 data_dir = opt.data_dir
 name = opt.name
